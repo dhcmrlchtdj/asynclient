@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-__version__ = "0.2.0"
 __all__ = [
     "co",
     "run",
@@ -9,12 +8,9 @@ __all__ = [
     "fetch",
 ]
 
-
 from urllib.parse import urlparse
 import asyncio
 import io
-
-
 
 
 co = asyncio.coroutine
@@ -188,4 +184,4 @@ if __name__ == '__main__':
         data = yield from fetch(url)
         print(data.body)
 
-    run(get("google.com"))
+    run(get("https://docs.python.org/3/library/io.html#binary-i-o"))
