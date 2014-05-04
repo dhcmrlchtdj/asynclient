@@ -10,12 +10,13 @@
 """
 
 from urllib.parse import urlparse
-import functools
 import asyncio
 import concurrent.futures
+import functools
 import io
 
-__version__ = "0.2.3"
+
+__version__ = "0.2.4"
 __author__ = "niris <nirisix@gmail.com>"
 __description__ = "An asynchronous HTTP client."
 __all__ = [
@@ -31,7 +32,6 @@ __all__ = [
 
 coro = asyncio.coroutine
 
-
 loop = asyncio.get_event_loop()
 
 run = loop.run_until_complete
@@ -44,6 +44,7 @@ sleep = functools.partial(asyncio.sleep, loop=loop)
 
 
 
+
 class ACError(Exception): pass
 class Timeout(ACError, TimeoutError): pass
 
@@ -51,11 +52,11 @@ class Timeout(ACError, TimeoutError): pass
 
 
 class HTTPRequest:
-    def __init__(self, url, method="GET", headers=None, body=b"", *,
+    def __init__(self, url, method=None, headers=None, body=b"", *,
                  ua="asynclient/"+__version__):
         self.url = ("http://" + url) if "://" not in url else url
         self._parse_url()
-        self.method = method
+        self.method = method or "GET"
         self.headers = {
             "Accept-Encoding": "identity",
             "Connection": "close",
@@ -107,17 +108,18 @@ class HTTPResponse:
 
 
 class HTTPConnection:
-    def __init__(self, url, *, timeout=None):
+    def __init__(self, url, *, method=None, timeout=None):
         self.url = url
         self.max_redirects = 5
         self.timeout = timeout
+        self.method = method
 
 
     @coro
     def get_response(self):
         redirect = 0
         while redirect < self.max_redirects:
-            self.request = HTTPRequest(self.url)
+            self.request = HTTPRequest(self.url, self.method)
             yield from self._connect()
             yield from self._send_request()
             resp = yield from self._get_response()
@@ -208,11 +210,36 @@ class HTTPConnection:
 
 
 
+class CONFIGURE:
+    def __init__(self):
+        self.keys = ("method", "timeout", "max_conns", "ua",)
+        self.settings = {}
+
+    def _update(self, old, new):
+        old.update({
+            key: val
+            for key, val in new.items()
+            if key in self.keys
+        })
+
+    def __call__(self, *l, **settings):
+        self._update(self.settings, settings)
+
+    def update(self, **settings):
+        new_settings = self.settings.copy()
+        self._update(new_settings, settings)
+        return new_settings
+
+config = CONFIGURE()
+
+
+
+
 @coro
-def fetch(url, *, timeout=None):
-    conn = HTTPConnection(
-        url,
-        timeout=timeout)
+def fetch(url, *l, **settings):
+    settings = config.update(**settings)
+
+    conn = HTTPConnection(url, **settings)
 
     return (yield from conn.get_response())
 
@@ -221,14 +248,14 @@ def fetch(url, *, timeout=None):
 
 @coro
 def get(url):
-    return (yield from fetch(url, "GET"))
+    return (yield from fetch(url, method="GET"))
 
 
 
 
 @coro
 def post(url):
-    return (yield from fetch(url, "POST"))
+    return (yield from fetch(url, method="POST"))
 
 
 
@@ -244,8 +271,6 @@ def main():
         resp = yield from fetch(url)
         print(resp.body)
     run(print_body(args.url))
-
-
 
 
 if __name__ == '__main__':
