@@ -1,3 +1,6 @@
-*.pyc
 *.swp
+*.pyc
+*.pyo
 *.egg-info
+__pycache__
+.DS_Store

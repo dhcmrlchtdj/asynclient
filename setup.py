@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
 from setuptools import setup
-import asynclient
+import asynclient as ac
 
 setup(
     name="asynclient",
-    version=asynclient.__version__,
+    version=ac.__version__,
     description="An asynchronous HTTP client.",
 
     author="niris",

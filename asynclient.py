@@ -1,19 +1,32 @@
 #!/usr/bin/env python3
 
-__all__ = [
-    "co",
-    "run",
-    "stop",
-    "close",
-    "fetch",
-]
+"""
+    asynclient
+    ~~~~~~~~~~
+
+    An asynchronous HTTP client, base on asyncio.
+
+    :copyright: (c) 2014 by niris.
+"""
 
 from urllib.parse import urlparse
 import asyncio
 import io
 
 
-co = asyncio.coroutine
+__version__ = "0.2.0"
+__author__ = "niris <nirisix@gmail.com>"
+__all__ = [
+    "coro",
+    "run", "stop", "close",
+    "fetch",
+    "config",
+]
+
+
+
+
+coro = asyncio.coroutine
 
 loop = asyncio.get_event_loop()
 
@@ -81,7 +94,7 @@ class HTTPConnection:
         self.max_redirects = 5
 
 
-    @co
+    @coro
     def get_response(self):
         redirect = 0
         while redirect < self.max_redirects:
@@ -102,23 +115,23 @@ class HTTPConnection:
             raise Exception("redirect")
 
 
-    @co
+    @coro
     def _connect(self):
         self.reader, self.writer = yield from asyncio.open_connection(
             self.request.netloc, self.request.port)
 
 
-    @co
+    @coro
     def _send_request(self):
         self.writer.write(self.request.request)
         yield from self.writer.drain()
 
 
-    @co
+    @coro
     def _get_response(self):
         r = self.reader
 
-        @co
+        @coro
         def getline():
             return (yield from r.readline()).decode().rstrip()
 
@@ -148,7 +161,7 @@ class HTTPConnection:
         return HTTPResponse(self.request, status, headers, body)
 
 
-    @co
+    @coro
     def _chunked_handler(self):
         r = self.reader
         body = io.BytesIO()
@@ -169,19 +182,8 @@ class HTTPConnection:
 
 
 
-@co
+@coro
 def fetch(url):
     conn = HTTPConnection(url)
     data = yield from conn.get_response()
     return data
-
-
-
-
-if __name__ == '__main__':
-    @co
-    def get(url):
-        data = yield from fetch(url)
-        print(data.body)
-
-    run(get("https://docs.python.org/3/library/io.html#binary-i-o"))
