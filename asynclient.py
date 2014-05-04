@@ -14,11 +14,12 @@ import asyncio
 import io
 
 
-__version__ = "0.2.1"
+__version__ = "0.2.2"
 __author__ = "niris <nirisix@gmail.com>"
 __description__ = "An asynchronous HTTP client."
 __all__ = [
     "coro",
+    "async", "gather",
     "run", "stop", "close",
     "fetch",
     "config",
@@ -28,6 +29,9 @@ __all__ = [
 
 
 coro = asyncio.coroutine
+
+async = asyncio.async
+gather = asyncio.gather
 
 loop = asyncio.get_event_loop()
 
@@ -58,9 +62,12 @@ class HTTPRequest:
 
     def _parse_url(self):
         parts = urlparse(self.url)
+
         self.netloc = parts.netloc
+
         ssl = parts.scheme == "https"
         self.port = parts.port or (443 if ssl else 80)
+
         path = parts.path or "/"
         self.path = "{}?{}".format(path, parts.query) if parts.query else path
 
@@ -72,8 +79,10 @@ class HTTPRequest:
             lines.extend(("{}: {}".format(k, v))
                          for k, v in self.headers.items())
             lines.extend(("", ""))
+
             self.req = io.BytesIO("\r\n".join(lines).encode())
             self.req.write(self.body)
+
         return self.req.getvalue()
 
 
@@ -188,6 +197,20 @@ def fetch(url):
     conn = HTTPConnection(url)
     data = yield from conn.get_response()
     return data
+
+
+
+
+@coro
+def get(url):
+    return (yield from fetch(url, "GET"))
+
+
+
+
+@coro
+def post(url):
+    return (yield from fetch(url, "POST"))
 
 
 
