@@ -4,7 +4,7 @@
     asynclient
     ~~~~~~~~~~
 
-    An asynchronous HTTP client, base on asyncio.
+    An asynchronous HTTP client.
 
     :copyright: (c) 2014 by niris.
 """
@@ -14,8 +14,9 @@ import asyncio
 import io
 
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 __author__ = "niris <nirisix@gmail.com>"
+__description__ = "An asynchronous HTTP client."
 __all__ = [
     "coro",
     "run", "stop", "close",
@@ -187,3 +188,24 @@ def fetch(url):
     conn = HTTPConnection(url)
     data = yield from conn.get_response()
     return data
+
+
+
+
+def main():
+    import argparse
+    ARGS = argparse.ArgumentParser(description=__description__)
+    ARGS.add_argument("url")
+    args = ARGS.parse_args()
+
+    @coro
+    def print_body(url):
+        resp = yield from fetch(url)
+        print(resp.body)
+    run(print_body(args.url))
+
+
+
+
+if __name__ == '__main__':
+    main()

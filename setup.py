@@ -6,7 +6,7 @@ import asynclient as ac
 setup(
     name="asynclient",
     version=ac.__version__,
-    description="An asynchronous HTTP client.",
+    description=ac.__description__,
 
     author="niris",
     author_email="nirisix@gmail.com",

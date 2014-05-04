@@ -17,4 +17,4 @@ Basic Usage
         resp = yield from ac.fetch("google.com")
         print(resp.body)
 
-    ac.run(get)
+    ac.run(get())
