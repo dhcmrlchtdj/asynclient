@@ -11,10 +11,10 @@
 
 from urllib.parse import urlparse
 import asyncio
+import concurrent.futures
 import io
 
-
-__version__ = "0.2.2"
+__version__ = "0.2.3"
 __author__ = "niris <nirisix@gmail.com>"
 __description__ = "An asynchronous HTTP client."
 __all__ = [
@@ -38,6 +38,11 @@ loop = asyncio.get_event_loop()
 run = loop.run_until_complete
 stop = loop.stop
 close = loop.close
+
+
+
+class ACError(Exception): pass
+class Timeout(ACError, TimeoutError): pass
 
 
 
@@ -99,9 +104,10 @@ class HTTPResponse:
 
 
 class HTTPConnection:
-    def __init__(self, url):
+    def __init__(self, url, *, timeout=None):
         self.url = url
         self.max_redirects = 5
+        self.timeout = timeout
 
 
     @coro
@@ -127,8 +133,15 @@ class HTTPConnection:
 
     @coro
     def _connect(self):
-        self.reader, self.writer = yield from asyncio.open_connection(
-            self.request.netloc, self.request.port)
+        fut = asyncio.open_connection(self.request.netloc, self.request.port)
+
+        if self.timeout is not None:
+            fut = asyncio.wait_for(fut, self.timeout)
+
+        try:
+            self.reader, self.writer = yield from fut
+        except concurrent.futures._base.TimeoutError as e:
+            raise Timeout(fut)
 
 
     @coro
@@ -193,10 +206,12 @@ class HTTPConnection:
 
 
 @coro
-def fetch(url):
-    conn = HTTPConnection(url)
-    data = yield from conn.get_response()
-    return data
+def fetch(url, *, timeout=None):
+    conn = HTTPConnection(
+        url,
+        timeout=timeout)
+
+    return (yield from conn.get_response())
 
 
 
