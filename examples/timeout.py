@@ -8,6 +8,6 @@ def get(url):
         resp = yield from ac.fetch(url, timeout=0)
         print(resp.body)
     except ac.Timeout as e:
-        print("connect timeout")
+        print("connection timeout")
 
 ac.run(get("google.com"))

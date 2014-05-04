@@ -6,6 +6,8 @@ import asynclient as ac
 def get(*urls):
     futures = []
     for url in urls:
+        # use ``ac.async`` instead of ``yield from``
+        # tasks will run in parallel
         fu = ac.async(ac.fetch(url))
         futures.append(fu)
 

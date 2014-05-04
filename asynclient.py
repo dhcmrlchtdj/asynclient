@@ -10,6 +10,7 @@
 """
 
 from urllib.parse import urlparse
+import functools
 import asyncio
 import concurrent.futures
 import io
@@ -19,7 +20,7 @@ __author__ = "niris <nirisix@gmail.com>"
 __description__ = "An asynchronous HTTP client."
 __all__ = [
     "coro",
-    "async", "gather",
+    "async", "gather", "sleep",
     "run", "stop", "close",
     "fetch",
     "config",
@@ -30,14 +31,16 @@ __all__ = [
 
 coro = asyncio.coroutine
 
-async = asyncio.async
-gather = asyncio.gather
 
 loop = asyncio.get_event_loop()
 
 run = loop.run_until_complete
 stop = loop.stop
 close = loop.close
+
+async = functools.partial(asyncio.async, loop=loop)
+gather = functools.partial(asyncio.gather, loop=loop)
+sleep = functools.partial(asyncio.sleep, loop=loop)
 
 
 
