@@ -9,38 +9,25 @@
     :copyright: (c) 2014 by niris.
 """
 
+from asyncio import coroutine
+from functools import partial
 from urllib.parse import urlparse
 import asyncio
 import concurrent.futures
-import functools
 import io
+import logging
 
 
-__version__ = "0.2.4"
+
+__version__ = "0.2.5"
 __author__ = "niris <nirisix@gmail.com>"
 __description__ = "An asynchronous HTTP client."
-__all__ = [
-    "coro",
-    "async", "gather", "sleep",
-    "run", "stop", "close",
-    "fetch",
-    "config",
-]
+__all__ = ["ac"]
 
 
 
 
-coro = asyncio.coroutine
-
-loop = asyncio.get_event_loop()
-
-run = loop.run_until_complete
-stop = loop.stop
-close = loop.close
-
-async = functools.partial(asyncio.async, loop=loop)
-gather = functools.partial(asyncio.gather, loop=loop)
-sleep = functools.partial(asyncio.sleep, loop=loop)
+logging.basicConfig(level=logging.INFO)
 
 
 
@@ -108,14 +95,14 @@ class HTTPResponse:
 
 
 class HTTPConnection:
-    def __init__(self, url, *, method=None, timeout=None):
+    def __init__(self, url, *, method="GET", timeout=None, max_redirects=5):
         self.url = url
-        self.max_redirects = 5
+        self.max_redirects = max_redirects
         self.timeout = timeout
         self.method = method
 
 
-    @coro
+    @coroutine
     def get_response(self):
         redirect = 0
         while redirect < self.max_redirects:
@@ -136,7 +123,7 @@ class HTTPConnection:
             raise Exception("redirect")
 
 
-    @coro
+    @coroutine
     def _connect(self):
         fut = asyncio.open_connection(self.request.netloc, self.request.port)
 
@@ -149,17 +136,17 @@ class HTTPConnection:
             raise Timeout(fut)
 
 
-    @coro
+    @coroutine
     def _send_request(self):
         self.writer.write(self.request.request)
         yield from self.writer.drain()
 
 
-    @coro
+    @coroutine
     def _get_response(self):
         r = self.reader
 
-        @coro
+        @coroutine
         def getline():
             return (yield from r.readline()).decode().rstrip()
 
@@ -189,7 +176,7 @@ class HTTPConnection:
         return HTTPResponse(self.request, status, headers, body)
 
 
-    @coro
+    @coroutine
     def _chunked_handler(self):
         r = self.reader
         body = io.BytesIO()
@@ -212,8 +199,14 @@ class HTTPConnection:
 
 class CONFIGURE:
     def __init__(self):
-        self.keys = ("method", "timeout", "max_conns", "ua",)
+        self.keys = (
+            "method",
+            "timeout",
+            "ua",
+            "max_redirects"
+        )
         self.settings = {}
+
 
     def _update(self, old, new):
         old.update({
@@ -222,41 +215,64 @@ class CONFIGURE:
             if key in self.keys
         })
 
-    def __call__(self, *l, **settings):
+
+    def __call__(self, **settings):
         self._update(self.settings, settings)
+
 
     def update(self, **settings):
         new_settings = self.settings.copy()
         self._update(new_settings, settings)
+        logging.info("connection config: %s", new_settings)
         return new_settings
 
-config = CONFIGURE()
 
 
 
+class Asynclient:
+    def __init__(self, max_tasks=10, *, loop=None):
+        self.governor = asyncio.Semaphore(max_tasks)
 
-@coro
-def fetch(url, *l, **settings):
-    settings = config.update(**settings)
+        _loop = loop or asyncio.get_event_loop()
 
-    conn = HTTPConnection(url, **settings)
+        self.loop = _loop
+        self.run = _loop.run_until_complete
+        self.stop = _loop.stop
+        self.close = _loop.close
 
-    return (yield from conn.get_response())
+        self.async = partial(asyncio.async, loop=_loop)
+        self.gather = partial(asyncio.gather, loop=_loop)
+        self.sleep = partial(asyncio.sleep, loop=_loop)
 
-
-
-
-@coro
-def get(url):
-    return (yield from fetch(url, method="GET"))
+        self.config = CONFIGURE()
 
 
+    def coro(self, gen):
+        return coroutine(gen)
 
 
-@coro
-def post(url):
-    return (yield from fetch(url, method="POST"))
+    @coroutine
+    def _fetch(self, url, **settings):
+        settings = self.config.update(**settings)
+        conn = HTTPConnection(url, **settings)
+        with (yield from self.governor):
+            return (yield from conn.get_response())
 
+
+    @coroutine
+    def get(self, url, **settings):
+        settings["method"] = "GET"
+        return (yield from self._fetch(url, **settings))
+
+
+    @coroutine
+    def post(self, url, **settings):
+        settings["method"] = "POST"
+        return (yield from self._fetch(url, **settings))
+
+
+
+ac = Asynclient()
 
 
 
@@ -266,12 +282,12 @@ def main():
     ARGS.add_argument("url")
     args = ARGS.parse_args()
 
-    @coro
+    @ac.coro
     def print_body(url):
-        resp = yield from fetch(url)
+        resp = yield from ac.get(url)
         print(resp.body)
-    run(print_body(args.url))
+    ac.run(print_body(args.url))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

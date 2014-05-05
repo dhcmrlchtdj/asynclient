@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
-import asynclient as ac
+from asynclient import ac
 
 @ac.coro
 def get(url):
-    # waiting for ``ac.fetch``
-    resp = yield from ac.fetch(url)
+    # waiting for ``ac.get``
+    resp = yield from ac.get(url)
     print(resp.body)
 
 ac.run(get("google.com"))

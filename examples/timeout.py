@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 
-import asynclient as ac
+from asynclient import ac
 
 @ac.coro
 def get(url):
     try:
-        resp = yield from ac.fetch(url, timeout=0)
+        resp = yield from ac.get(url, timeout=0)
         print(resp.body)
-    except ac.Timeout as e:
+    except TimeoutError as e:
         print("connection timeout")
 
 ac.run(get("google.com"))

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import asynclient as ac
+from asynclient import ac
 
 @ac.coro
 def get(*urls):
@@ -8,7 +8,7 @@ def get(*urls):
     for url in urls:
         # use ``ac.async`` instead of ``yield from``
         # tasks will run in parallel
-        fu = ac.async(ac.fetch(url))
+        fu = ac.async(ac.get(url))
         futures.append(fu)
 
     resps = yield from ac.gather(*futures)
