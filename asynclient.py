@@ -15,19 +15,13 @@ from urllib.parse import urlparse
 import asyncio
 import concurrent.futures
 import io
-import logging
 
 
 
-__version__ = "0.2.6"
+__version__ = "0.2.7"
 __author__ = "niris <nirisix@gmail.com>"
 __description__ = "An asynchronous HTTP client."
 __all__ = ["ac"]
-
-
-
-
-logging.basicConfig(level=logging.INFO)
 
 
 
@@ -73,6 +67,8 @@ class HTTPRequest:
         }
         self.headers.update(headers)
         self.body = body.encode() if isinstance(body, str) else body
+
+        self._request = None
 
 
     @property
@@ -248,7 +244,6 @@ class CONFIGURE:
     def update(self, **settings):
         new_settings = self.settings.copy()
         self._update(new_settings, settings)
-        logging.info("connection config: %s", new_settings)
         return new_settings
 
 
