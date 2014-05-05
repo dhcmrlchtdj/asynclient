@@ -10,7 +10,7 @@ setup(
 
     author="niris",
     author_email="nirisix@gmail.com",
-    url="https://github.com/dhcmrlchtdj",
+    url="https://github.com/dhcmrlchtdj/asynclient",
 
     license="MIT",
     classifiers=[
@@ -18,7 +18,9 @@ setup(
 
         "License :: OSI Approved :: MIT License",
 
-        "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: Implementation :: CPython",
         "Programming Language :: Python :: 3.4",
+
+        "Topic :: Internet :: WWW/HTTP",
     ],
 )
