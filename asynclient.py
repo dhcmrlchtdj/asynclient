@@ -19,7 +19,7 @@ import logging
 
 
 
-__version__ = "0.2.5"
+__version__ = "0.2.6"
 __author__ = "niris <nirisix@gmail.com>"
 __description__ = "An asynchronous HTTP client."
 __all__ = ["ac"]
@@ -34,29 +34,15 @@ logging.basicConfig(level=logging.INFO)
 
 class ACError(Exception): pass
 class ACTimeout(ACError, TimeoutError): pass
+class ACHTTPError(ACError): pass
 
 
 
 
-class HTTPRequest:
-    def __init__(self, url, method=None, headers=None, body=b"", *,
-                 ua="asynclient/"+__version__):
+class URL:
+    def __init__(self, url):
         self.url = ("http://" + url) if "://" not in url else url
-        self._parse_url()
-        self.method = method or "GET"
-        self.headers = {
-            "Accept-Encoding": "identity",
-            "Connection": "close",
-            "Host": self.netloc,
-            "User-Agent": ua,
-        }
-        if headers:
-            self.headers.update(headers)
-        self.body = body.encode() if isinstance(body, str) else body
-        self.req = None
 
-
-    def _parse_url(self):
         parts = urlparse(self.url)
 
         self.netloc = parts.netloc
@@ -68,26 +54,47 @@ class HTTPRequest:
         self.path = "{}?{}".format(path, parts.query) if parts.query else path
 
 
+
+
+class HTTPHeaders(dict): pass
+
+
+
+
+class HTTPRequest:
+    def __init__(self, url, method="GET", headers=None, body=b""):
+        self.url = url
+        self.method = method
+        self.path = url.path
+        self.headers = {
+            "Accept-Encoding": "identity",
+            "Connection": "close",
+            "Host": url.netloc,
+        }
+        self.headers.update(headers)
+        self.body = body.encode() if isinstance(body, str) else body
+
+
     @property
     def request(self):
-        if not self.req:
+        if not self._request:
             lines = ["{} {} HTTP/1.0".format(self.method, self.path)]
             lines.extend(("{}: {}".format(k, v))
                          for k, v in self.headers.items())
             lines.extend(("", ""))
 
-            self.req = io.BytesIO("\r\n".join(lines).encode())
-            self.req.write(self.body)
+            self._request = io.BytesIO("\r\n".join(lines).encode())
+            self._request.write(self.body)
 
-        return self.req.getvalue()
+        return self._request.getvalue()
 
 
 
 
 class HTTPResponse:
-    def __init__(self, request, code, headers, body):
-        self.request = request
+    def __init__(self, code, reason, headers, body):
         self.code = code
+        self.reason = reason
         self.headers = headers
         self.body = body
 
@@ -95,28 +102,42 @@ class HTTPResponse:
 
 
 class HTTPConnection:
-    def __init__(self, url, *, method="GET", timeout=None, max_redirects=5):
-        self.url = url
-        self.method = method
-        self.max_redirects = max_redirects
+    def __init__(self, url, *,
+                 timeout=None, follow_redirects=True, max_redirects=5,
+                 ua="asynclient/"+__version__,
+                 **kwds):
+        self.url = URL(url)
+
         self.timeout = timeout
+        self.follow_redirects = follow_redirects
+        self.max_redirects = max_redirects
+
+        headers = kwds.setdefault("headers", {})
+        headers.setdefault("User-Agent", ua)
+        self.settings = kwds
 
 
     @coroutine
     def get_response(self):
         redirect = 0
         while redirect < self.max_redirects:
-            self.request = HTTPRequest(self.url, self.method)
             yield from self._connect()
-            yield from self._send_request()
+
+            request = HTTPRequest(self.url, **self.settings)
+            yield from self._send_request(request)
+
             resp = yield from self._get_response()
 
             if 200 <= resp.code < 300:
                 return resp
             elif 300 <= resp.code < 400:
-                self.url = resp.headers.get("location")
+                if self.follow_redirects:
+                    self.url = URL(resp.headers.get("location"))
+                else:
+                    return resp
             else:
-                raise ACError("status code '{}'".format(resp.code))
+                raise ACHTTPError(
+                    "HTTP Error {}: {}".format(resp.code, resp.reason))
 
             redirect+=1
         else:
@@ -125,7 +146,7 @@ class HTTPConnection:
 
     @coroutine
     def _connect(self):
-        fut = asyncio.open_connection(self.request.netloc, self.request.port)
+        fut = asyncio.open_connection(self.url.netloc, self.url.port)
 
         if self.timeout is not None:
             fut = asyncio.wait_for(fut, self.timeout)
@@ -137,9 +158,10 @@ class HTTPConnection:
 
 
     @coroutine
-    def _send_request(self):
-        self.writer.write(self.request.request)
-        yield from self.writer.drain()
+    def _send_request(self, request):
+        w = self.writer
+        w.write(request.request)
+        yield from w.drain()
 
 
     @coroutine
@@ -153,7 +175,7 @@ class HTTPConnection:
         status_line = yield from getline()
         status_parts = status_line.split(None, 2)
         if len(status_parts) != 3 or not status_parts[1].isdigit():
-            raise Exception(status_line)
+            raise ACError(status_line)
         http_version, status, reason = status_parts
         status = int(status)
 
@@ -173,7 +195,7 @@ class HTTPConnection:
         else:
             body = yield from r.read()
 
-        return HTTPResponse(self.request, status, headers, body)
+        return HTTPResponse(status, reason, headers, body)
 
 
     @coroutine
@@ -201,9 +223,12 @@ class CONFIGURE:
     def __init__(self):
         self.keys = (
             "method",
-            "timeout",
+            "headers",
+            "body",
             "ua",
-            "max_redirects"
+            "timeout",
+            "follow_redirects",
+            "max_redirects",
         )
         self.settings = {}
 
