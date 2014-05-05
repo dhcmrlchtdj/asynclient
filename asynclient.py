@@ -18,7 +18,7 @@ import io
 
 
 
-__version__ = "0.2.7"
+__version__ = "0.2.8"
 __author__ = "niris <nirisix@gmail.com>"
 __description__ = "An asynchronous HTTP client."
 __all__ = ["ac"]
@@ -185,13 +185,27 @@ class HTTPConnection:
 
         if "content-length" in headers:
             nbytes = int(headers["content-length"])
-            body = yield from r.read(nbytes)
+            body = yield from self._length_handler(nbytes)
+            assert nbytes == len(body), (nbytes, len(body))
         elif headers.get("transfer-encoding", "") == "chunked":
             body = yield from self._chunked_handler()
         else:
             body = yield from r.read()
 
         return HTTPResponse(status, reason, headers, body)
+
+
+    @coroutine
+    def _length_handler(self, nbytes):
+        r = self.reader
+        body = io.BytesIO()
+        while nbytes:
+            buf = yield from r.read(nbytes)
+            if not buf:
+                raise ACError(nbytes)
+            body.write(buf)
+            nbytes -= len(buf)
+        return body.getvalue()
 
 
     @coroutine
