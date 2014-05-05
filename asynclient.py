@@ -185,27 +185,13 @@ class HTTPConnection:
 
         if "content-length" in headers:
             nbytes = int(headers["content-length"])
-            body = yield from self._length_handler(nbytes)
-            assert nbytes == len(body), (nbytes, len(body))
+            body = yield from r.readexactly(nbytes)
         elif headers.get("transfer-encoding", "") == "chunked":
             body = yield from self._chunked_handler()
         else:
             body = yield from r.read()
 
         return HTTPResponse(status, reason, headers, body)
-
-
-    @coroutine
-    def _length_handler(self, nbytes):
-        r = self.reader
-        body = io.BytesIO()
-        while nbytes:
-            buf = yield from r.read(nbytes)
-            if not buf:
-                raise ACError(nbytes)
-            body.write(buf)
-            nbytes -= len(buf)
-        return body.getvalue()
 
 
     @coroutine
@@ -220,7 +206,6 @@ class HTTPConnection:
                 break
             else:
                 block = yield from r.readexactly(size)
-                assert len(block) == size, (len(block), size)
                 body.write(block)
             crlf = yield from r.readline()
             assert crlf == b'\r\n', repr(crlf)
