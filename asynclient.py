@@ -33,7 +33,7 @@ logging.basicConfig(level=logging.INFO)
 
 
 class ACError(Exception): pass
-class Timeout(ACError, TimeoutError): pass
+class ACTimeout(ACError, TimeoutError): pass
 
 
 
@@ -97,9 +97,9 @@ class HTTPResponse:
 class HTTPConnection:
     def __init__(self, url, *, method="GET", timeout=None, max_redirects=5):
         self.url = url
+        self.method = method
         self.max_redirects = max_redirects
         self.timeout = timeout
-        self.method = method
 
 
     @coroutine
@@ -116,11 +116,11 @@ class HTTPConnection:
             elif 300 <= resp.code < 400:
                 self.url = resp.headers.get("location")
             else:
-                raise Exception("status code '{}'".format(resp.code))
+                raise ACError("status code '{}'".format(resp.code))
 
             redirect+=1
         else:
-            raise Exception("redirect")
+            raise ACError("redirect")
 
 
     @coroutine
@@ -133,7 +133,7 @@ class HTTPConnection:
         try:
             self.reader, self.writer = yield from fut
         except concurrent.futures._base.TimeoutError as e:
-            raise Timeout(fut)
+            raise ACTimeout("connect timeout")
 
 
     @coroutine
@@ -231,14 +231,14 @@ class CONFIGURE:
 
 class Asynclient:
     def __init__(self, max_tasks=10, *, loop=None):
-        self.governor = asyncio.Semaphore(max_tasks)
-
         _loop = loop or asyncio.get_event_loop()
 
         self.loop = _loop
         self.run = _loop.run_until_complete
         self.stop = _loop.stop
         self.close = _loop.close
+
+        self.governor = asyncio.Semaphore(max_tasks, loop=_loop)
 
         self.async = partial(asyncio.async, loop=_loop)
         self.gather = partial(asyncio.gather, loop=_loop)
