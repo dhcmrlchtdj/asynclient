@@ -18,7 +18,7 @@ import io
 
 
 
-__version__ = "0.2.8"
+__version__ = "0.2.9"
 __author__ = "niris <nirisix@gmail.com>"
 __description__ = "An asynchronous HTTP client."
 __all__ = ["ac"]
@@ -99,9 +99,12 @@ class HTTPResponse:
 
 class HTTPConnection:
     def __init__(self, url, *,
+                 loop=None,
                  timeout=None, follow_redirects=True, max_redirects=5,
                  ua="asynclient/"+__version__,
                  **kwds):
+        self.loop = loop or asyncio.get_event_loop()
+
         self.url = URL(url)
 
         self.timeout = timeout
@@ -142,10 +145,11 @@ class HTTPConnection:
 
     @coroutine
     def _connect(self):
-        fut = asyncio.open_connection(self.url.netloc, self.url.port)
+        fut = asyncio.open_connection(self.url.netloc, self.url.port,
+                                      loop=self.loop)
 
         if self.timeout is not None:
-            fut = asyncio.wait_for(fut, self.timeout)
+            fut = asyncio.wait_for(fut, self.timeout, loop=self.loop)
 
         try:
             self.reader, self.writer = yield from fut
@@ -273,7 +277,7 @@ class Asynclient:
     @coroutine
     def _fetch(self, url, **settings):
         settings = self.config.update(**settings)
-        conn = HTTPConnection(url, **settings)
+        conn = HTTPConnection(url, loop=self.loop, **settings)
         with (yield from self.governor):
             return (yield from conn.get_response())
 
