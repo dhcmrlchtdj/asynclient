@@ -3,7 +3,8 @@
 from asynclient import ac
 
 ac.config(
-    timeout=0
+    timeout=1,
+    request_timeout=10
 )
 
 @ac.coro

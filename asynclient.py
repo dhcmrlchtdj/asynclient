@@ -18,7 +18,7 @@ import io
 
 
 
-__version__ = "0.2.9"
+__version__ = "0.2.10"
 __author__ = "niris <nirisix@gmail.com>"
 __description__ = "An asynchronous HTTP client."
 __all__ = ["ac"]
@@ -138,18 +138,21 @@ class HTTPConnection:
                 raise ACHTTPError(
                     "HTTP Error {}: {}".format(resp.code, resp.reason))
 
-            redirect+=1
+            redirect += 1
         else:
             raise ACError("redirect")
 
 
     @coroutine
     def _connect(self):
-        fut = asyncio.open_connection(self.url.netloc, self.url.port,
-                                      loop=self.loop)
+        _url = self.url
+        _loop = self.loop
+        _timeout = self.timeout
 
-        if self.timeout is not None:
-            fut = asyncio.wait_for(fut, self.timeout, loop=self.loop)
+        fut = asyncio.open_connection(_url.netloc, _url.port, loop=_loop)
+
+        if _timeout is not None:
+            fut = asyncio.wait_for(fut, _timeout, loop=_loop)
 
         try:
             self.reader, self.writer = yield from fut
@@ -225,7 +228,8 @@ class CONFIGURE:
             "headers",
             "body",
             "ua",
-            "timeout",
+            "timeout", # connect timeout
+            "request_timeout",
             "follow_redirects",
             "max_redirects",
         )
@@ -277,9 +281,23 @@ class Asynclient:
     @coroutine
     def _fetch(self, url, **settings):
         settings = self.config.update(**settings)
-        conn = HTTPConnection(url, loop=self.loop, **settings)
+
+        timeout = settings.pop("request_timeout", None)
+
+        _loop = self.loop
+
+        conn = HTTPConnection(url, loop=_loop, **settings)
+
         with (yield from self.governor):
-            return (yield from conn.get_response())
+            fut = conn.get_response()
+
+            if timeout is not None:
+                fut = asyncio.wait_for(fut, timeout, loop=_loop)
+
+            try:
+                return (yield from fut)
+            except concurrent.futures._base.TimeoutError as e:
+                raise ACTimeout("request timeout")
 
 
     @coroutine
@@ -295,7 +313,9 @@ class Asynclient:
 
 
 
+
 ac = Asynclient()
+
 
 
 
@@ -310,6 +330,8 @@ def main():
         resp = yield from ac.get(url)
         print(resp.body)
     ac.run(print_body(args.url))
+
+
 
 
 if __name__ == "__main__":
