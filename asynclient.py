@@ -65,23 +65,29 @@ class HTTPHeaders(collections.abc.MutableMapping):
             for k, v in mapping.items():
                 self[k] = v
 
+
     def __getitem__(self, key):
         key = key.title()
         return self._d[key]
+
 
     def __setitem__(self, key, value):
         key = key.title()
         self._d[key] = value
 
+
     def __delitem__(self, key):
         key = key.title()
         del self._d[key]
 
+
     def __iter__(self):
         return iter(self._d)
 
+
     def __len__(self):
         return len(self._d)
+
 
     def __str__(self):
         return str(self._d)
