@@ -13,15 +13,23 @@ from asyncio import coroutine
 from functools import partial
 from urllib.parse import urlparse
 import asyncio
+import collections.abc
 import concurrent.futures
 import io
+import logging
 
 
 
-__version__ = "0.2.10"
+
+__version__ = "0.2.11"
 __author__ = "niris <nirisix@gmail.com>"
 __description__ = "An asynchronous HTTP client."
 __all__ = ["ac"]
+
+
+
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -50,7 +58,33 @@ class URL:
 
 
 
-class HTTPHeaders(dict): pass
+class HTTPHeaders(collections.abc.MutableMapping):
+    def __init__(self, mapping=None):
+        self._d = {}
+        if mapping:
+            for k, v in mapping.items():
+                self[k] = v
+
+    def __getitem__(self, key):
+        key = key.title()
+        return self._d[key]
+
+    def __setitem__(self, key, value):
+        key = key.title()
+        self._d[key] = value
+
+    def __delitem__(self, key):
+        key = key.title()
+        del self._d[key]
+
+    def __iter__(self):
+        return iter(self._d)
+
+    def __len__(self):
+        return len(self._d)
+
+    def __str__(self):
+        return str(self._d)
 
 
 
@@ -60,11 +94,11 @@ class HTTPRequest:
         self.url = url
         self.method = method
         self.path = url.path
-        self.headers = {
-            "Accept-Encoding": "identity",
-            "Connection": "close",
-            "Host": url.netloc,
-        }
+        self.headers = HTTPHeaders({
+            "accept-encoding": "identity",
+            "connection": "close",
+            "host": url.netloc,
+        })
         self.headers.update(headers)
         self.body = body.encode() if isinstance(body, str) else body
 
@@ -81,6 +115,8 @@ class HTTPRequest:
 
             self._request = io.BytesIO("\r\n".join(lines).encode())
             self._request.write(self.body)
+
+        logger.debug("request '%s'", self._request.getvalue())
 
         return self._request.getvalue()
 
@@ -111,8 +147,8 @@ class HTTPConnection:
         self.follow_redirects = follow_redirects
         self.max_redirects = max_redirects
 
-        headers = kwds.setdefault("headers", {})
-        headers.setdefault("User-Agent", ua)
+        headers = kwds.setdefault("headers", HTTPHeaders())
+        headers.setdefault("user-agent", ua)
         self.settings = kwds
 
 
@@ -181,13 +217,13 @@ class HTTPConnection:
         http_version, status, reason = status_parts
         status = int(status)
 
-        headers = {}
+        headers = HTTPHeaders()
         while True:
             header_line = yield from getline()
             if not header_line:
                 break
             key, value = header_line.split(":", 1)
-            headers[key.lower()] = value.lstrip()
+            headers[key] = value.lstrip()
 
         if "content-length" in headers:
             nbytes = int(headers["content-length"])
