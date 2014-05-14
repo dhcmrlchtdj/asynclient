@@ -45,7 +45,7 @@ class URL:
         self.port = parts.port or (443 if ssl else 80)
 
         path = parts.path or "/"
-        self.path = "{}?{}".format(path, parts.query) if parts.query else path
+        self.path = "%s?%s" % (path, parts.query) if parts.query else path
 
 
 
@@ -74,8 +74,8 @@ class HTTPRequest:
     @property
     def request(self):
         if not self._request:
-            lines = ["{} {} HTTP/1.0".format(self.method, self.path)]
-            lines.extend(("{}: {}".format(k, v))
+            lines = ["%s %s HTTP/1.0" % (self.method, self.path)]
+            lines.extend(("%s: %s" % (k, v))
                          for k, v in self.headers.items())
             lines.extend(("", ""))
 
@@ -135,8 +135,7 @@ class HTTPConnection:
                 else:
                     return resp
             else:
-                raise ACHTTPError(
-                    "HTTP Error {}: {}".format(resp.code, resp.reason))
+                raise ACHTTPError("HTTP Error %s: %s" % (resp.code, resp.reason))
 
             redirect += 1
         else:
