@@ -21,7 +21,7 @@ import logging
 
 
 
-__version__ = "0.2.11"
+__version__ = "0.2.12"
 __author__ = "niris <nirisix@gmail.com>"
 __description__ = "An asynchronous HTTP client."
 __all__ = ["ac"]
@@ -136,14 +136,14 @@ class HTTPResponse:
 class HTTPConnection:
     def __init__(self, url, *,
                  loop=None,
-                 timeout=None, follow_redirects=True, max_redirects=5,
+                 connect_timeout=None, follow_redirects=True, max_redirects=5,
                  ua="asynclient/"+__version__,
                  **kwds):
         self.loop = loop or asyncio.get_event_loop()
 
         self.url = URL(url)
 
-        self.timeout = timeout
+        self.connect_timeout = connect_timeout
         self.follow_redirects = follow_redirects
         self.max_redirects = max_redirects
 
@@ -182,7 +182,7 @@ class HTTPConnection:
     def _connect(self):
         _url = self.url
         _loop = self.loop
-        _timeout = self.timeout
+        _timeout = self.connect_timeout
 
         fut = asyncio.open_connection(_url.netloc, _url.port, loop=_loop)
 
@@ -263,7 +263,7 @@ class CONFIGURE:
             "headers",
             "body",
             "ua",
-            "timeout", # connect timeout
+            "connect_timeout",
             "request_timeout",
             "follow_redirects",
             "max_redirects",
@@ -317,8 +317,7 @@ class Asynclient:
     def _fetch(self, url, **settings):
         settings = self.config.update(**settings)
 
-        timeout = settings.pop("request_timeout", None)
-
+        _timeout = settings.pop("request_timeout", None)
         _loop = self.loop
 
         conn = HTTPConnection(url, loop=_loop, **settings)
@@ -326,8 +325,8 @@ class Asynclient:
         with (yield from self.governor):
             fut = conn.get_response()
 
-            if timeout is not None:
-                fut = asyncio.wait_for(fut, timeout, loop=_loop)
+            if _timeout is not None:
+                fut = asyncio.wait_for(fut, _timeout, loop=_loop)
 
             try:
                 return (yield from fut)

@@ -5,7 +5,7 @@ from asynclient import ac
 @ac.coro
 def get(url):
     try:
-        resp = yield from ac.get(url, timeout=0)
+        resp = yield from ac.get(url, connect_timeout=0)
         print(resp.body)
     except TimeoutError as e:
         print(e)
