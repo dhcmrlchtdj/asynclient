@@ -10,6 +10,7 @@
 """
 
 from asyncio import coroutine
+from collections import namedtuple
 from functools import partial
 from urllib.parse import urlparse
 import asyncio
@@ -21,7 +22,7 @@ import logging
 
 
 
-__version__ = "0.2.12"
+__version__ = "0.2.13"
 __author__ = "niris <nirisix@gmail.com>"
 __description__ = "An asynchronous HTTP client."
 __all__ = ["ac"]
@@ -41,19 +42,27 @@ class ACHTTPError(ACError): pass
 
 
 
-class URL:
-    def __init__(self, url):
-        self.url = ("http://" + url) if "://" not in url else url
+URL = namedtuple("URL", ("url", "host", "port", "ssl", "netloc", "path"))
 
-        parts = urlparse(self.url)
+@coroutine
+def parse_url(url):
+    url = url if ("://" in url) else ("http://" + url)
 
-        self.netloc = parts.netloc
+    parts = urlparse(url)
 
-        ssl = parts.scheme == "https"
-        self.port = parts.port or (443 if ssl else 80)
+    ssl = parts.scheme == "https"
 
-        path = parts.path or "/"
-        self.path = "%s?%s" % (path, parts.query) if parts.query else path
+    netloc = parts.netloc
+
+    path = parts.path or "/"
+    if parts.query:
+        path = "%s?%s" % (path, parts.query)
+
+    port = parts.port or (443 if ssl else 80)
+
+    host = parts.hostname
+
+    return URL(url, host, port, ssl, netloc, path)
 
 
 
@@ -97,9 +106,8 @@ class HTTPHeaders(collections.abc.MutableMapping):
 
 class HTTPRequest:
     def __init__(self, url, method="GET", headers=None, body=b""):
-        self.url = url
-        self.method = method
         self.path = url.path
+        self.method = method
         self.headers = HTTPHeaders({
             "accept-encoding": "identity",
             "connection": "close",
@@ -147,7 +155,7 @@ class HTTPConnection:
                  **kwds):
         self.loop = loop or asyncio.get_event_loop()
 
-        self.url = URL(url)
+        self.url = url
 
         self.connect_timeout = connect_timeout
         self.follow_redirects = follow_redirects
@@ -160,11 +168,12 @@ class HTTPConnection:
 
     @coroutine
     def get_response(self):
+        url = yield from parse_url(self.url)
         redirect = 0
         while redirect < self.max_redirects:
-            yield from self._connect()
+            yield from self._connect(url)
 
-            request = HTTPRequest(self.url, **self.settings)
+            request = HTTPRequest(url, **self.settings)
             yield from self._send_request(request)
 
             resp = yield from self._get_response()
@@ -173,7 +182,7 @@ class HTTPConnection:
                 return resp
             elif 300 <= resp.code < 400:
                 if self.follow_redirects:
-                    self.url = URL(resp.headers.get("location"))
+                    url = yield from parse_url(resp.headers.get("location"))
                 else:
                     return resp
             else:
@@ -185,12 +194,11 @@ class HTTPConnection:
 
 
     @coroutine
-    def _connect(self):
-        _url = self.url
+    def _connect(self, url):
         _loop = self.loop
         _timeout = self.connect_timeout
 
-        fut = asyncio.open_connection(_url.netloc, _url.port, loop=_loop)
+        fut = asyncio.open_connection(url.netloc, url.port, loop=_loop)
 
         if _timeout is not None:
             fut = asyncio.wait_for(fut, _timeout, loop=_loop)
