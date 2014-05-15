@@ -22,10 +22,10 @@ import logging
 
 
 
-__version__ = "0.2.13"
+__version__ = "0.2.14"
 __author__ = "niris <nirisix@gmail.com>"
 __description__ = "An asynchronous HTTP client."
-__all__ = ["ac"]
+__all__ = ["ac", "Asynclient"]
 
 
 
@@ -170,7 +170,7 @@ class HTTPConnection:
     def get_response(self):
         url = yield from parse_url(self.url)
         redirect = 0
-        while redirect < self.max_redirects:
+        while True:
             yield from self._connect(url)
 
             request = HTTPRequest(url, **self.settings)
@@ -181,16 +181,14 @@ class HTTPConnection:
             if 200 <= resp.code < 300:
                 return resp
             elif 300 <= resp.code < 400:
-                if self.follow_redirects:
-                    url = yield from parse_url(resp.headers.get("location"))
-                else:
+                if (not self.follow_redirects) or (redirect >= self.max_redirects):
                     return resp
+                else:
+                    redirect += 1
+                    url = yield from parse_url(resp.headers.get("location"))
             else:
                 raise ACHTTPError("HTTP Error %s: %s" % (resp.code, resp.reason))
 
-            redirect += 1
-        else:
-            raise ACError("redirect")
 
 
     @coroutine
