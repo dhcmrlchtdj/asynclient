@@ -151,7 +151,7 @@ class HTTPConnection:
     def __init__(self, url, *,
                  loop=None,
                  connect_timeout=None, follow_redirects=True, max_redirects=5,
-                 ua="asynclient/"+__version__,
+                 ua="asynclient/" + __version__,
                  **kwds):
         self.loop = loop or asyncio.get_event_loop()
 
@@ -203,7 +203,7 @@ class HTTPConnection:
 
         try:
             self.reader, self.writer = yield from fut
-        except concurrent.futures._base.TimeoutError as e:
+        except concurrent.futures._base.TimeoutError:
             raise ACTimeout("connect timeout")
 
 
@@ -225,6 +225,7 @@ class HTTPConnection:
         status_line = yield from getline()
         status_parts = status_line.split(None, 2)
         if len(status_parts) != 3 or not status_parts[1].isdigit():
+            logger.debug(status_line)
             raise ACError(status_line)
         http_version, status, reason = status_parts
         status = int(status)
@@ -342,7 +343,7 @@ class Asynclient:
 
             try:
                 return (yield from fut)
-            except concurrent.futures._base.TimeoutError as e:
+            except concurrent.futures._base.TimeoutError:
                 raise ACTimeout("request timeout")
 
 
